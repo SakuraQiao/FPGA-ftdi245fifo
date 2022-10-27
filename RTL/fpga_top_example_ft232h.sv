@@ -3,9 +3,10 @@
 // Module  : fpga_top_example_ft232h
 // Type    : synthesizable, FPGA's top, IP's example design
 // Standard: SystemVerilog 2005 (IEEE1800-2005)
-// Function: an example of ftdi_245fifo, connect FT232H chip
-//           send increase data from FT232H chip,
-//           recv data from FT232H chip and check whether it is increasing
+// Function: an example of ftdi_245fifo
+//           the pins of this module should connect to FT232H chip
+//           TX channel (FPGA -> FT232H -> USB-cable -> Host-PC) : send increasing bytes
+//           RX channel (Host-PC -> USB-cable -> FT232H -> FPGA) : recv bytes and check whether it is increasing
 //--------------------------------------------------------------------------------------------------------
 
 module fpga_top_example_ft232h (
@@ -25,6 +26,7 @@ module fpga_top_example_ft232h (
     inout        [ 7:0] usb_data     // to FT232H's pin20~13 (ADBUS7~ADBUS0)
 );
 
+
 assign usb_resetn = 1'b1;  // 1=normal operation , Comment out this line if this signal is not connected to FPGA.
 assign usb_pwrsav = 1'b1;  // 1=normal operation , Comment out this line if this signal is not connected to FPGA.
 assign usb_siwu   = 1'b1;  // 1=send immidiently , Comment out this line if this signal is not connected to FPGA.
@@ -35,18 +37,24 @@ reg  [ 3:0] reset_shift = '0;
 reg         rstn = '0;
 
 // USB send data stream
-wire        usbtx_valid;
+reg         usbtx_valid = 1'b0;
 wire        usbtx_ready;
-reg  [63:0] usbtx_data = '0;
+reg  [ 5:0] usbtx_datah = '0;
+wire [31:0] usbtx_data;
 
-// USB recieved data stream
+// USB received data stream
 wire        usbrx_valid;
-wire        usbrx_ready;
+reg         usbrx_ready = 1'b0;
 wire [ 7:0] usbrx_data;
 
-reg  [ 7:0] expect_data = '0;
-reg  [31:0] led_cnt = 0;
-assign led = led_cnt == 0;
+// other signals for USB received control
+reg  [ 7:0] last_data = '0;
+reg  [31:0] busy_cnt = 0;
+reg  [15:0] error_cnt = '0;
+
+
+assign led = error_cnt == '0;
+
 
 
 //------------------------------------------------------------------------------------------------------------
@@ -58,44 +66,57 @@ always @ (posedge clk)
 
 
 //------------------------------------------------------------------------------------------------------------
-// USB TX behavior
+// USB TX behavior : always try to send increasing bytes
 //------------------------------------------------------------------------------------------------------------
-assign usbtx_valid = 1'b1;                   // always try to send
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        usbtx_data <= '0;
+        usbtx_valid <= 1'b0;
+        usbtx_datah <= '0;
     end else begin
-        if(usbtx_valid & usbtx_ready)            // if send success,
-            usbtx_data <= usbtx_data + 64'd1;    //    send data + 1
+        if(usbtx_valid & usbtx_ready)                           // if send success,
+            usbtx_datah <= usbtx_datah + 6'd1;                  // send increasing bytes
+        usbtx_valid <= 1'b1;                                    // always try to send
     end
 
+assign usbtx_data = { usbtx_datah, 2'd3,
+                      usbtx_datah, 2'd2,
+                      usbtx_datah, 2'd1,
+                      usbtx_datah, 2'd0  };                     // send increasing bytes
+
 
 
 //------------------------------------------------------------------------------------------------------------
-// USB RX behavior
+// USB RX behavior : check
 //------------------------------------------------------------------------------------------------------------
-assign usbrx_ready = 1'b1;                   // recv always ready
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        led_cnt <= 0;
-        expect_data <= '0;
+        last_data <= '0;
+        busy_cnt <= 0;
+        error_cnt <= '0;
+        usbrx_ready <= 1'b0;
     end else begin
-        if(led_cnt > 0)
-            led_cnt <= led_cnt - 1;
-        if(usbrx_valid & usbrx_ready) begin      // if recv success,
-            if(expect_data != usbrx_data)        //    if the data does not meet expectations
-                led_cnt <= 50000000;
-            expect_data <= usbrx_data + 8'd1;
+        if(usbrx_valid & usbrx_ready) begin                    // recv a data
+            if(busy_cnt != 0)                                  // busy_cnt>0 means there is a received data in the past 0.1 seconds
+                if(usbrx_data != last_data + 8'd1)             // mismatch: RX data not increasing
+                    error_cnt <= '1;                           // detected that RX data not increasing !!!
+                else if(error_cnt != '0)                       // match : RX data is increasing
+                    error_cnt <= error_cnt - 16'd1;            // 
+            last_data <= usbrx_data;                           // save the last RX data
+            busy_cnt <= 5000000;                               //
+        end else if(busy_cnt != 0) begin
+            busy_cnt <= busy_cnt - 1;
         end
+        usbrx_ready <= 1'b1;                                   // recv always ready
     end
+
 
 
 //------------------------------------------------------------------------------------------------------------
 // USB TX and RX controller
 //------------------------------------------------------------------------------------------------------------
 ftdi_245fifo #(
-    .TX_DEXP     ( 3           ), // TX data stream width,  0=8bit, 1=16bit, 2=32bit, 3=64bit, 4=128bit ...
-    .TX_AEXP     ( 9           ), // TX FIFO depth = 2^TX_AEXP = 2^10 = 1024
+    .TX_DEXP     ( 2           ), // TX data stream width,  0=8bit, 1=16bit, 2=32bit, 3=64bit, 4=128bit ...
+    .TX_AEXP     ( 10          ), // TX FIFO depth = 2^TX_AEXP = 2^10 = 1024
     .RX_DEXP     ( 0           ), // RX data stream width,  0=8bit, 1=16bit, 2=32bit, 3=64bit, 4=128bit ...
     .RX_AEXP     ( 10          ), // RX FIFO depth = 2^RX_AEXP = 2^10 = 1024
     .C_DEXP      ( 0           )  // FTDI USB chip data width, 0=8bit, 1=16bit, 2=32bit ... for FT232H is 0, for FT600 is 1, for FT601 is 2.
@@ -118,6 +139,7 @@ ftdi_245fifo #(
     .usb_data    ( usb_data    ),
     .usb_be      (             )  // FT232H do not have BE signals
 );
+
 
 
 endmodule

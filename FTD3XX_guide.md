@@ -1,5 +1,7 @@
 中文 | [English](#en)
 
+　
+
 安装 FTD3XX 驱动和 Python FTD3XX 库
 ====================================
 
@@ -11,7 +13,7 @@
 
 进入 [D3XX Driver 官网页面](https://www.ftdichip.com/Drivers/D3XX.htm) ，在 D3XX Drivers 那一栏的表格里。下载exe形式的驱动并安装。如下图。
 
-另外，要下载 DLL 压缩包， 解压后在里面找到符合你计算机的 FTD3XX.DLL 文件。若为32位计算机，请找到 32-bit(i386) DLL；若为64位计算机，请找到64-bit(amd64) DLL。如果文件名是 FTD3XX64.DLL 等，请一律重命名为 FTD3XX.DLL
+另外，要下载 DLL 压缩包， 解压后在里面找到符合你计算机的 FTD3XX.DLL 文件。若为32位计算机，请找到 32-bit(i386) DLL；若为64位计算机，请找到 64-bit (amd64) DLL。如果文件名是 FTD3XX64.DLL 等，请一律重命名为 FTD3XX.DLL
 
 ![FT600驱动下载](./figures/ft600_driver_download.png)
 
@@ -35,7 +37,7 @@ ftd3xx 似乎无法用 `pip install` 命令来安装。请打开 [FT60X 软件�
 
 ![Python 软件示例](./figures/ftd3xx_python_install.png)
 
-下载后解压，在里面找到 **setup.py** ，运行 CMD 命令 `python setup.py install` 来安装。 
+下载后解压，在里面找到 **setup.py** ，在本目录中运行 CMD 命令 `python setup.py install` 来安装。 
 
 ### 步骤5：复制 FTD3XX.DLL 文件到 Python 环境中
 
@@ -49,9 +51,11 @@ import ftd3xx
 
 至此，FT600 所需的 Python 运行环境已就绪。
 
+　
 
+　
 
-<span id="en">Install FTD3XX Driver and Library</span>
+<span id="en">Install FTD3XX Driver and Python ftd3xx Library</span>
 ====================================
 
 To run FT600 related Python programs on Windows, follow these steps:
